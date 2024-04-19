@@ -13,11 +13,16 @@ def calculate_subtraction():
     data = request.json
     years = data.get('years')
     month = data.get('month')
-    if not years or not month:
+    user = data.get('user')
+    passw = data.get('passw')
+    if not years or not month or not user or not passw:
         return jsonify({'error': 'The array of years and the month are required.'}), 400
-    result = main(years, month)
-
-    return send_file(BytesIO(result), mimetype='image/tiff')
+    result = main(years, month, user, passw)
+    
+    if result.error:
+        return jsonify({'error': result.error}), 400
+    else:
+        return send_file(BytesIO(result.image), mimetype='image/tiff')
 
 
 if __name__ == '__main__':

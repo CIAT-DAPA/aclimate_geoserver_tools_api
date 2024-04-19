@@ -5,6 +5,11 @@ from urllib.parse import urlencode
 from rasterio.io import MemoryFile
 
 
+class Response:
+    def __init__(self, image=None, error=None):
+        self.image = image
+        self.error = error
+
 
 def convert_to_geojson(subtraction_array, spatial_info):
     # Obtener la transformación espacial (affine transformation) del archivo GeoTIFF
@@ -94,7 +99,9 @@ def subtract_rasters(raster1, raster2):
 
     return subtraction
 
-def main(years, month):
+def main(years, month, user, passw):
+
+  try:
     spatial_info = None
     all_raster_arrays = []
 
@@ -117,7 +124,7 @@ def main(years, month):
         url = base_url + urlencode(params)
         urls.append(url)
 
-        response = requests.get(url)
+        response = requests.get(url, auth=(user, passw))
         # If response is 404, nothing found, break out of loop
         if response.status_code == 404:
             break
@@ -149,7 +156,9 @@ def main(years, month):
     url = base_url + urlencode(params)
     urls.append(url)
 
-    responseC = requests.get(url)
+    responseC = requests.get(url, auth=(user, passw))
+
+
     
     climatology = None
 
@@ -173,6 +182,9 @@ def main(years, month):
         geojson_result = memfile.read()
     #geojson_result = convert_to_geojson(subtraction, spatial_info)
 
-    return geojson_result
+    return Response(image=geojson_result)
+  
+  except Exception as e:
+      # Si ocurre un error, configura el error en el objeto Response
+      return Response(error=str(e))
 
-    
