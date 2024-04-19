@@ -3,7 +3,6 @@ import rasterio
 import numpy as np
 from urllib.parse import urlencode
 from rasterio.io import MemoryFile
-import json
 
 
 
