@@ -18,7 +18,7 @@ def calculate_subtraction():
     if not years or not month or not user or not passw:
         return jsonify({'error': 'The array of years and the month are required.'}), 400
     result = main(years, month, user, passw)
-    
+
     if result.error:
         return jsonify({'error': result.error}), 400
     else:
@@ -26,4 +26,4 @@ def calculate_subtraction():
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run()
