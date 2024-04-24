@@ -193,3 +193,35 @@ def main(years, month, user, passw):
       # Si ocurre un error, configura el error en el objeto Response
       return Response(error=str(e))
 
+
+
+def calculate_mean(workspace, mosaic_name, year, month, user, passw):
+    
+    try:
+      url_root = "https://geo.aclimate.org/geoserver/"
+      base_url = f"{url_root}{workspace}/ows?"
+      params = {
+          "service": "WCS",
+          "request": "GetCoverage",
+          "version": "2.0.1",
+          "coverageId": mosaic_name,
+          "format": "image/geotiff",
+          "subset": f"Time(\"{year:04d}-{month:02d}-01T00:00:00.000Z\")"
+      }
+      url = base_url + urlencode(params)
+
+      response = requests.get(url, auth=(user, passw))
+
+      mean_value = None
+      with MemoryFile(response.content) as memfile:
+          with memfile.open() as dataset:
+              raster_array = dataset.read(1)
+              raster_array = raster_array.astype(np.float64)
+              masked_array = np.ma.masked_where(raster_array == np.min(raster_array), raster_array)
+              
+              mean_value = np.mean(masked_array)
+
+      return Response(image=mean_value)
+    except Exception as e:
+      # Si ocurre un error, configura el error en el objeto Response
+      return Response(error=str(e))
