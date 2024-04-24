@@ -170,14 +170,19 @@ def main(years, month, user, passw):
 
     subtraction = subtract_rasters(average_array, climatology)
 
+    climatology_norm = np.linalg.norm(climatology)
+
+    # Normalizar la matriz subtraction
+    normalized_subtraction = subtraction / climatology_norm
+
     # valores_filtrados = subtraction[subtraction != -9999]
 
     # # Obtener el mínimo de los valores filtrados
     # minimo = np.min(valores_filtrados)
     # print(minimo)
     with MemoryFile() as memfile:
-        with memfile.open(driver='GTiff', width=subtraction.shape[1], height=subtraction.shape[0], count=1, dtype=subtraction.dtype, crs=spatial_info['crs'], transform=spatial_info['transform']) as dataset:
-            dataset.write(subtraction, 1)
+        with memfile.open(driver='GTiff', width=normalized_subtraction.shape[1], height=normalized_subtraction.shape[0], count=1, dtype=subtraction.dtype, crs=spatial_info['crs'], transform=spatial_info['transform']) as dataset:
+            dataset.write(normalized_subtraction, 1)
         memfile.seek(0)
         geojson_result = memfile.read()
     #geojson_result = convert_to_geojson(subtraction, spatial_info)
