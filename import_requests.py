@@ -6,7 +6,6 @@ from rasterio.io import MemoryFile
 from rasterio.mask import mask
 import geopandas as gpd
 import json
-import pprint
 
 class Response:
     def __init__(self, image=None, error=None):
