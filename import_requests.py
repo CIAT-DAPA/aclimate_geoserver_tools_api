@@ -3,7 +3,10 @@ import rasterio
 import numpy as np
 from urllib.parse import urlencode
 from rasterio.io import MemoryFile
-
+from rasterio.mask import mask
+import geopandas as gpd
+import json
+import pprint
 
 class Response:
     def __init__(self, image=None, error=None):
@@ -225,3 +228,106 @@ def calculate_mean(workspace, mosaic_name, year, month, user, passw):
     except Exception as e:
       # Si ocurre un error, configura el error en el objeto Response
       return Response(error=str(e))
+    
+
+def getDataPerRegion(workspace, stores, dates, user, passw, shp_workspace, shp_store):
+    try:
+
+      url_root = "https://geo.aclimate.org/geoserver/"
+      base_url = f"{url_root}{workspace}/ows?"
+      base_url_shp = f"{url_root}{shp_workspace}/ows?"
+
+      params = {
+        "service": "WFS",
+        "request": "GetFeature",
+        "version": "1.0.0",
+        "typeName": shp_workspace+":"+shp_store,
+        "outputFormat": "application/json",
+        "maxFeatures": 50,
+        "src": "EPSG:4326"
+      } 
+      url = base_url_shp + urlencode(params)
+      response = requests.get(url, auth=(user, passw))
+
+
+      shapefile = json.loads(response.content)
+      
+
+      results = {}
+
+      for geometry in shapefile['features']:
+          department = geometry["properties"]["ADM1_EN"]
+          department_data = {}
+          for i, date in enumerate(dates, start=1):
+              season_data = {}
+              
+              # Iterate over each store
+              for store in stores:
+                  # Get the raster corresponding to the store and date
+                  params = {
+                      "service": "WCS",
+                      "request": "GetCoverage",
+                      "version": "2.0.1",
+                      "coverageId": store,
+                      "format": "image/geotiff",
+                      "subset": f"Time(\"{date[0]:04d}-{date[1]:02d}-01T00:00:00.000Z\")"
+                  }
+                  url = base_url + urlencode(params)
+                  response = requests.get(url, auth=(user, passw))
+                  
+                  # Mask the raster with the current geometry
+                  with MemoryFile(response.content) as memfile:
+                      with memfile.open() as raster:
+                          try:
+                              out_image, _ = mask(raster, [geometry['geometry']], crop=True)
+                              masked_out_image = np.ma.masked_where(out_image < 0, out_image)
+                              average_without_min = masked_out_image.mean()
+
+                              if np.ma.is_masked(average_without_min):
+                                  average_without_min = "Null"
+                              else:
+                                  average_without_min = float(average_without_min)
+                              
+                              season_data[store] = average_without_min
+                          except Exception as e:
+                              print(f"Error masking raster for store '{store}' on date '{date}': {e}")
+              
+              department_data[f"season_{i}"] = season_data
+          
+          results[department] = department_data
+      json_results = json.dumps(results, indent=4)
+
+      return Response(image=json_results)
+    except Exception as e:
+      print(e)
+      return Response(error=str(e))
+      
+
+        
+
+      
+
+
+  
+    
+
+
+# Vector=gpd.read_file(inshp)
+
+# Vector=Vector[Vector['HYBAS_ID']==6060122060] # Subsetting to my AOI
+
+# with rasterio.open(inRas) as src:
+#     Vector=Vector.to_crs(src.crs)
+#     # print(Vector.crs)
+#     out_image, out_transform=mask(src,Vector.geometry,crop=True)
+#     out_meta=src.meta.copy() # copy the metadata of the source DEM
+    
+# out_meta.update({
+#     "driver":"Gtiff",
+#     "height":out_image.shape[1], # height starts with shape[1]
+#     "width":out_image.shape[2], # width starts with shape[2]
+#     "transform":out_transform
+# })
+              
+# with rasterio.open(outRas,'w',**out_meta) as dst:
+#     dst.write(out_image)
