@@ -5,11 +5,15 @@ from urllib.parse import urlencode
 from rasterio.io import MemoryFile
 from rasterio.mask import mask
 import geopandas as gpd
+import os
 import json
+import shutil
+from geoserverConexion.geoserver import GeoserverImport 
+import re
 
 class Response:
-    def __init__(self, image=None, error=None):
-        self.image = image
+    def __init__(self, res=None, error=None):
+        self.res = res
         self.error = error
 
 
@@ -188,7 +192,7 @@ def main(years, month, user, passw):
         geojson_result = memfile.read()
     #geojson_result = convert_to_geojson(subtraction, spatial_info)
 
-    return Response(image=geojson_result)
+    return Response(res=geojson_result)
   
   except Exception as e:
       # Si ocurre un error, configura el error en el objeto Response
@@ -222,7 +226,7 @@ def calculate_mean(workspace, mosaic_name, year, month, user, passw):
               
               mean_value = np.mean(masked_array)
 
-      return Response(image=mean_value)
+      return Response(res=mean_value)
     except Exception as e:
       # Si ocurre un error, configura el error en el objeto Response
       return Response(error=str(e))
@@ -295,7 +299,7 @@ def getDataPerRegion(workspace, stores, dates, user, passw, shp_workspace, shp_s
           results[department] = department_data
       json_results = json.dumps(results, indent=4)
 
-      return Response(image=json_results)
+      return Response(res=json_results)
     except Exception as e:
       print(e)
       return Response(error=str(e))
@@ -304,28 +308,50 @@ def getDataPerRegion(workspace, stores, dates, user, passw, shp_workspace, shp_s
         
 
       
+def importGeoserver(workspace, user, passw, geo_url, store, tiff):
+    try:
+        root_path  = os.path.dirname(os.path.realpath(__file__))
 
+        patron = r'^.+_\d{6}\.tif$'
 
-  
+   
+        regex = re.compile(patron)
+
+        if not regex.match(tiff.filename):
+            return Response(error="El nombre no coincide con el patron filename_YYYYmm.tif")
+
+        geoserver_path= os.path.join(root_path, "geoserverConexion")
+        layer_path= os.path.join(geoserver_path, "layers")
+        zip_path= os.path.join(geoserver_path, "zip")
+        tmp_path= os.path.join(geoserver_path, "tmp")
+        store_path= os.path.join(layer_path, store)
+        os.makedirs(store_path, exist_ok=True)
+        os.makedirs(tmp_path, exist_ok=True)
+        os.makedirs(zip_path, exist_ok=True)
+        tiff.save(os.path.join(store_path, tiff.filename))
+        geoserver = GeoserverImport(workspace, user, passw, geo_url)
+        result = geoserver.connect_geoserver()
+        shutil.rmtree(store_path)
+        shutil.rmtree(tmp_path)
+        shutil.rmtree(zip_path)
+        if not result:
+            return Response(error="Error al guardar")
+
+        return Response(res="Se guardo correctamente")
+    except Exception as e:
+      return Response(error=str(e))
     
 
 
-# Vector=gpd.read_file(inshp)
+def getGeoserverStores(workspace, user, passw, geo_url):
+    try:
+        geoserver = GeoserverImport(workspace, user, passw, geo_url)
+        stores = geoserver.get_geoserver_stores()
+        store_names = [store.name for store in stores]
+        return Response(res=store_names)
+    except Exception as e:
+      print(e)
+      return Response(error=str(e))
 
-# Vector=Vector[Vector['HYBAS_ID']==6060122060] # Subsetting to my AOI
 
-# with rasterio.open(inRas) as src:
-#     Vector=Vector.to_crs(src.crs)
-#     # print(Vector.crs)
-#     out_image, out_transform=mask(src,Vector.geometry,crop=True)
-#     out_meta=src.meta.copy() # copy the metadata of the source DEM
-    
-# out_meta.update({
-#     "driver":"Gtiff",
-#     "height":out_image.shape[1], # height starts with shape[1]
-#     "width":out_image.shape[2], # width starts with shape[2]
-#     "transform":out_transform
-# })
-              
-# with rasterio.open(outRas,'w',**out_meta) as dst:
-#     dst.write(out_image)
+#importGeoserver("fc_analogues_hn", "scalderon", "Santi2711.", "https://geo.aclimate.org/geoserver/rest/", "above", "aa")
