@@ -8,8 +8,8 @@ import geopandas as gpd
 import os
 import json
 import shutil
-from geoserverConexion.geoserver import GeoserverImport 
 import re
+from geoserverConexion.geoserver import GeoserverImport 
 
 class Response:
     def __init__(self, res=None, error=None):
@@ -105,7 +105,7 @@ def subtract_rasters(raster1, raster2):
 
     return subtraction
 
-def main(years, month, user, passw):
+def main(years, month, user, passw, anomalie=True):
 
   try:
     spatial_info = None
@@ -150,49 +150,51 @@ def main(years, month, user, passw):
     # Calculate average of rasters
     average_array = np.mean(all_raster_arrays, axis=0)
     
-    base_url = f"{url_root}{workspaceC}/ows?"
-    params = {
-        "service": "WCS",
-        "request": "GetCoverage",
-        "version": "2.0.1",
-        "coverageId": mosaic_name,
-        "format": "image/geotiff",
-        "subset": f"Time(\"2000-{month:02d}-01T00:00:00.000Z\")"
-    }
-    url = base_url + urlencode(params)
-    urls.append(url)
+    if anomalie:
+        base_url = f"{url_root}{workspaceC}/ows?"
+        params = {
+            "service": "WCS",
+            "request": "GetCoverage",
+            "version": "2.0.1",
+            "coverageId": mosaic_name,
+            "format": "image/geotiff",
+            "subset": f"Time(\"2000-{month:02d}-01T00:00:00.000Z\")"
+        }
+        url = base_url + urlencode(params)
+        urls.append(url)
 
-    responseC = requests.get(url, auth=(user, passw))
-
-
-    
-    climatology = None
-
-    with MemoryFile(responseC.content) as memfile:
-            with memfile.open() as raster:
-                raster_array = raster.read(1)
-                climatology = raster_array
+        responseC = requests.get(url, auth=(user, passw))
 
 
-    subtraction = subtract_rasters(average_array, climatology)
+        
+        climatology = None
+
+        with MemoryFile(responseC.content) as memfile:
+                with memfile.open() as raster:
+                    raster_array = raster.read(1)
+                    climatology = raster_array
 
 
-    # Normalizar la matriz subtraction
+        subtraction = subtract_rasters(average_array, climatology)
 
-    # valores_filtrados = subtraction[subtraction != -9999]
+        
+        with MemoryFile() as memfile:
+            with memfile.open(driver='GTiff', width=subtraction.shape[1], height=subtraction.shape[0], count=1, dtype=subtraction.dtype, crs=spatial_info['crs'], transform=spatial_info['transform']) as dataset:
+                dataset.write(subtraction, 1)
+            memfile.seek(0)
+            geojson_result = memfile.read()
+        #geojson_result = convert_to_geojson(subtraction, spatial_info)
 
-    # # Obtener el mínimo de los valores filtrados
-    # minimo = np.min(valores_filtrados)
-    # print(minimo)
-    
-    with MemoryFile() as memfile:
-        with memfile.open(driver='GTiff', width=subtraction.shape[1], height=subtraction.shape[0], count=1, dtype=subtraction.dtype, crs=spatial_info['crs'], transform=spatial_info['transform']) as dataset:
-            dataset.write(subtraction, 1)
-        memfile.seek(0)
-        geojson_result = memfile.read()
-    #geojson_result = convert_to_geojson(subtraction, spatial_info)
+        return Response(res=geojson_result)
+    else:
+        with MemoryFile() as memfile:
+            with memfile.open(driver='GTiff', width=average_array.shape[1], height=average_array.shape[0], count=1, dtype=average_array.dtype, crs=spatial_info['crs'], transform=spatial_info['transform']) as dataset:
+                dataset.write(average_array, 1)
+            memfile.seek(0)
+            geojson_result = memfile.read()
+        #geojson_result = convert_to_geojson(subtraction, spatial_info)
 
-    return Response(res=geojson_result)
+        return Response(res=geojson_result)
   
   except Exception as e:
       # Si ocurre un error, configura el error en el objeto Response
@@ -214,9 +216,7 @@ def calculate_mean(workspace, mosaic_name, year, month, user, passw):
           "subset": f"Time(\"{year:04d}-{month:02d}-01T00:00:00.000Z\")"
       }
       url = base_url + urlencode(params)
-
       response = requests.get(url, auth=(user, passw))
-
       mean_value = None
       with MemoryFile(response.content) as memfile:
           with memfile.open() as dataset:

@@ -16,9 +16,10 @@ def calculate_subtraction():
     month = data.get('month')
     user = data.get('user')
     passw = data.get('passw')
+    anomalie = data.get('anomalie', True)
     if not years or not month or not user or not passw:
         return jsonify({'error': 'The array of years and the month are required.'}), 400
-    result = main(years, month, user, passw)
+    result = main(years, month, user, passw, anomalie)
 
     if result.error:
         return jsonify({'error': result.error}), 400
